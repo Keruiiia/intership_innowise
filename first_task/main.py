@@ -40,9 +40,8 @@ def init_argparse() -> argparse.ArgumentParser:
 
 def get_sql_query(name: str) -> str:
     query_file_name = os.path.join("sql", name)
-    file = open(query_file_name, "r")
-    content = file.read()
-    file.close()
+    with open(query_file_name, "r") as file:
+        content = file.read()
     return content
 
 
@@ -52,10 +51,8 @@ parser = init_argparse()
 args = parser.parse_args()
 print(args.students)
 print(args.rooms)
-print(args.format)
 
 # json
-
 rooms_file = open(args.rooms)
 rooms_data = json.load(rooms_file)
 for i, room in enumerate(rooms_data):
@@ -65,25 +62,55 @@ rooms_file.close()
 students_file = open(args.students)
 students_data = json.load(students_file)
 for i, student in enumerate(students_data):
-    students_data[i] = tuple(students_data[i].values())
+    students_data[i] = tuple(student.values())
 students_file.close()
 
+connection = None
+cur = None
+try:
+    connection = psycopg2.connect(
+        database=os.getenv("POSTGRES_DATABASE"),
+        user=os.getenv("POSTGRES_USER"),
+        password=os.getenv("POSTGRES_PASSWORD"),
+        host=os.getenv("POSTGRES_HOST"),
+        port=os.getenv("POSTGRES_PORT")
+    )
 
-connection = psycopg2.connect(
-    database=os.getenv("POSTGRES_DATABASE"),
-    user=os.getenv("POSTGRES_USER"),
-    password=os.getenv("POSTGRES_PASSWORD"),
-    host=os.getenv("POSTGRES_HOST"),
-    port=os.getenv("POSTGRES_PORT")
-)
+    cur = connection.cursor()
 
-cur = connection.cursor()
+    # INSERT rooms
+    cur.executemany(
+        get_sql_query('insert_rooms.sql'),
+        rooms_data
+    )
+    connection.commit()
 
-cur.executemany(get_sql_query('insert_rooms.sql'), rooms_data)
-cur.executemany(get_sql_query('insert_students.sql'), students_data)
-connection.commit()
-cur.execute("SELECT name FROM students LIMIT 10")
-rows = cur.fetchall()
-for row in rows:
-    print(row)
+    # INSERT students
+    cur.executemany(
+        get_sql_query('insert_students.sql'),
+        students_data
+    )
+    connection.commit()
+
+    def execute_query(cur, query_name: str):
+        cur.execute(get_sql_query(query_name))
+        query_result = cur.fetchall()
+
+        columns = [desc[0] for desc in cur.description]
+        query_result = [dict(zip(columns, row)) for row in query_result]
+
+        with open(f'results/{query_name.split(".")[0]}_result.json', 'w') as f:
+            json.dump(query_result, f, default=str)
+
+    execute_query(cur, 'query_1.sql')
+    execute_query(cur, 'query_2.sql')
+    execute_query(cur, 'query_3.sql')
+    execute_query(cur, 'query_4.sql')
+
+finally:
+    if cur is not None:
+        cur.close()
+    if connection is not None:
+        connection.close()
+print("Files saved in 'results' folder")
 
