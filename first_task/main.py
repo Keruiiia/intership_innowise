@@ -15,6 +15,11 @@ format (выходной формат: xml или json)
 Написать скрипт, целью которого будет загрузка этих двух файлов и запись данных в базу'''
 
 import argparse
+import os
+import psycopg2
+import json
+from dotenv import load_dotenv
+
 
 def init_argparse() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -32,14 +37,24 @@ def init_argparse() -> argparse.ArgumentParser:
     )
     return parser
 
+
+def get_sql_query(name: str) -> str:
+    query_file_name = os.path.join("sql", name)
+    file = open(query_file_name, "r")
+    content = file.read()
+    file.close()
+    return content
+
+
+load_dotenv()
+
 parser = init_argparse()
 args = parser.parse_args()
 print(args.students)
 print(args.rooms)
 print(args.format)
 
-
-import json
+# json
 
 rooms_file = open(args.rooms)
 rooms_data = json.load(rooms_file)
@@ -53,24 +68,22 @@ for i, student in enumerate(students_data):
     students_data[i] = tuple(students_data[i].values())
 students_file.close()
 
-import psycopg2
 
 connection = psycopg2.connect(
-                            database="rooms_and_students",
-                            user="postgres",
-                            password="postgres",
-                            host="localhost",
-                            port=5432
+    database=os.getenv("POSTGRES_DATABASE"),
+    user=os.getenv("POSTGRES_USER"),
+    password=os.getenv("POSTGRES_PASSWORD"),
+    host=os.getenv("POSTGRES_HOST"),
+    port=os.getenv("POSTGRES_PORT")
 )
 
 cur = connection.cursor()
 
-cur.executemany("INSERT INTO rooms (id, name) VALUES (%s, %s)", rooms_data)
-cur.executemany("INSERT INTO students (birthday, id, name, room_id, sex) \
-                VALUES (%s, %s, %s, %s, %s)", students_data)
+cur.executemany(get_sql_query('insert_rooms.sql'), rooms_data)
+cur.executemany(get_sql_query('insert_students.sql'), students_data)
+connection.commit()
 cur.execute("SELECT name FROM students LIMIT 10")
 rows = cur.fetchall()
 for row in rows:
     print(row)
-
 
