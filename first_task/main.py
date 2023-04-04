@@ -26,15 +26,9 @@ def init_argparse() -> argparse.ArgumentParser:
         usage="%(prog)s [OPTION] [FILE]...",
         description="read file, get argument"
     )
-    parser.add_argument(
-        "-s", "--students"
-    )
-    parser.add_argument(
-        "-r", "--rooms"
-    )
-    parser.add_argument(
-        "-f", "--format"
-    )
+    parser.add_argument("-s", "--students")
+    parser.add_argument("-r", "--rooms")
+    parser.add_argument("-f", "--format")
     return parser
 
 
@@ -56,7 +50,7 @@ print(args.rooms)
 rooms_file = open(args.rooms)
 rooms_data = json.load(rooms_file)
 for i, room in enumerate(rooms_data):
-    rooms_data[i] = tuple(rooms_data[i].values())
+    rooms_data[i] = tuple(room.values())
 rooms_file.close()
 
 students_file = open(args.students)
@@ -75,7 +69,6 @@ try:
         host=os.getenv("POSTGRES_HOST"),
         port=os.getenv("POSTGRES_PORT")
     )
-
     cur = connection.cursor()
 
     # INSERT rooms
@@ -113,4 +106,5 @@ finally:
     if connection is not None:
         connection.close()
 print("Files saved in 'results' folder")
+
 
