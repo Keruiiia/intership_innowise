@@ -73,45 +73,47 @@ WHERE NOT EXISTS (
 		  WHERE inventory.film_id = film.film_id
 		 );
 
+-- query with left join
+
+SELECT 
+	film.title
+FROM
+	film
+	LEFT JOIN inventory USING(film_id)
+WHERE
+	inventory.film_id IS NULL;
+
 
 
 /* 5. Вывести топ 3 актеров, которые больше всего появлялись в фильмах в категории “Children”. 
       Если у нескольких актеров одинаковое кол-во фильмов, вывести всех. */
 
-WITH top_children_actors AS(
-			SELECT 
-				actor.actor_id,
-				actor.first_name,
-				actor.last_name,
-				COUNT(*) AS count_films
-			FROM
-				actor
-				JOIN film_actor USING(actor_id)
-				JOIN film_category USING(film_id)
-				JOIN category USING(category_id)
-			WHERE 
-				category.name = 'Children'
-			GROUP BY
-				actor.actor_id
-			ORDER BY
-				count_films DESC
-	),
-	top_counters AS(
-		SELECT 
-			DISTINCT count_films AS counter
-		FROM 
-			top_children_actors
-		ORDER BY
-			1 DESC
-		LIMIT 3
-	)
-	
+WITH top_children_actors AS (
+		SELECT
+			actor.actor_id,
+			actor.first_name,
+			actor.last_name,
+			COUNT(*) AS count_films,
+			DENSE_RANK() OVER (ORDER BY COUNT(*) DESC) AS rank
+		FROM
+			actor
+			JOIN film_actor USING (actor_id)
+			JOIN film_category USING (film_id)
+			JOIN category USING (category_id)
+		WHERE
+			category.name = 'Children'
+		GROUP BY
+			1, 2, 3
+		)
 SELECT
-	*
+	actor_id,
+	first_name,
+	last_name,
+	count_films
 FROM
 	top_children_actors
-WHERE 
-	top_children_actors.count_films IN (SELECT counter FROM top_counters);
+WHERE
+	rank <= 3;
 
 
 
@@ -137,51 +139,63 @@ ORDER BY
    в городах (customer.address_id в этом city), и которые начинаются на букву “a”. 
    То же самое сделать для городов в которых есть символ “-”. Написать все в одном запросе. */
 
-WITH film_full AS(
-     SELECT 
-	    film_id,
-            title,
-            name
-     FROM 
-	  film
-          LEFT JOIN film_category USING(film_id)
-          LEFT JOIN category USING(category_id)
-     ),
-     max_rental_hours AS (
-     SELECT 
-	    c.city AS city_name,
-            f.name AS film_category,
-            SUM(EXTRACT(HOUR FROM (r.return_date - r.rental_date))) AS total_rental_hours
-     FROM 
- 	  city c
-          JOIN address a USING(city_id)
-          JOIN customer cu USING(address_id)
-          JOIN rental r USING(customer_id)
-          JOIN inventory i USING(inventory_id)
-          JOIN film_full f USING(film_id)
-     WHERE 
-	  (c.city LIKE 'a%' OR c.city LIKE '%-%')
-     GROUP BY 
-	   c.city, f.name
-     ORDER BY
-	   c.city, total_rental_hours DESC
-     )
+WITH film_full AS (
+		SELECT
+			film_id,
+			title,
+			name
+		FROM
+		film
+			LEFT JOIN film_category USING(film_id)
+			LEFT JOIN category USING(category_id)
+		),
+	max_rental_hours AS (
+		SELECT
+		c.city AS city_name,
+		CASE
+			WHEN UPPER(c.city) LIKE 'A%' THEN 'Starts with A'
+			WHEN UPPER(c.city) LIKE '%-%' THEN 'Has hyphen'
+		END AS city_category,
+		f.name AS film_category,
+		SUM(EXTRACT(HOUR FROM (r.return_date - r.rental_date))) AS total_rental_hours
+		FROM
+			city c
+			JOIN address a USING(city_id)
+			JOIN customer cu USING(address_id)
+			JOIN rental r USING(customer_id)
+			JOIN inventory i USING(inventory_id)
+			JOIN film_full f USING(film_id)
+		WHERE
+			UPPER(c.city) LIKE 'A%' OR UPPER(c.city) LIKE '%-%'
+		GROUP BY
+		c.city, city_category, f.name
+		),
+	sum_rental_hours_by_city_category AS (
+		SELECT
+			city_category,
+			film_category,
+			SUM(total_rental_hours) AS max_total_rental_hours
+		FROM
+			max_rental_hours
+		GROUP BY
+			city_category, film_category
+		),
+	max_rental_hours_by_city AS (
+		SELECT
+			city_category,
+			film_category,
+			max_total_rental_hours,
+			ROW_NUMBER() OVER (PARTITION BY city_category ORDER BY max_total_rental_hours DESC)
+				AS rn
+		FROM
+			sum_rental_hours_by_city_category
+		ORDER BY
+			city_category
+	)
 
-SELECT 
-	city_name,
+SELECT
+	city_category,
 	film_category,
-	total_rental_hours
-FROM 
-	max_rental_hours m
-WHERE 
-	(m.city_name, m.total_rental_hours) IN (
-     	SELECT 
-		city_name, 
-		MAX(total_rental_hours)
-     	FROM
-		max_rental_hours
-     	GROUP BY
-		city_name
-     	)
-ORDER BY 
-	city_name;
+	max_total_rental_hours
+FROM max_rental_hours_by_city
+WHERE rn = 1;
