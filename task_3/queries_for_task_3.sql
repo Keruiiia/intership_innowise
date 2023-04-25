@@ -157,7 +157,7 @@ WITH film_full AS (
 			WHEN UPPER(c.city) LIKE '%-%' THEN 'Has hyphen'
 		END AS city_category,
 		f.name AS film_category,
-		SUM(EXTRACT(HOUR FROM (r.return_date - r.rental_date))) AS total_rental_hours
+		SUM(DATE_PART('day', (return_date - rental_date)) * 24 + DATE_PART('hour', (return_date - rental_date))) AS total_rental_hours
 		FROM
 			city c
 			JOIN address a USING(city_id)
