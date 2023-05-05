@@ -90,7 +90,6 @@ WHERE
 
 WITH top_children_actors AS (
 		SELECT
-			actor.actor_id,
 			actor.first_name,
 			actor.last_name,
 			COUNT(*) AS count_films,
@@ -103,10 +102,9 @@ WITH top_children_actors AS (
 		WHERE
 			category.name = 'Children'
 		GROUP BY
-			1, 2, 3
+			1, 2
 		)
 SELECT
-	actor_id,
 	first_name,
 	last_name,
 	count_films
