@@ -25,7 +25,7 @@ connection = snowflake.connector.connect(
     schema = SNOWFLAKE_SCHEMA
 )
 
-def parse_csv(**context):
+def parse_csv():
     data = pd.read_csv(filename)
     data = data.reset_index(drop=True)
     data.to_csv('/home/keruiiia/airflow/data/parsed_data.csv', index=False)
@@ -41,7 +41,7 @@ def create_data_streams():
     connection.close()
 	
 	
-def create_stage(**context):
+def create_stage():
     cursor = connection.cursor()
 
     cursor.execute("""create or replace file format my_csv_format
